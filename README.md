@@ -1,2 +1,2 @@
 # SQL-migrator
-Database migration tool (postgreSQL only supported)
+Database migration tool (PostgreSQL is supported only)

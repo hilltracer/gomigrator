@@ -1,0 +1,33 @@
+name: gomigrator CI
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  GO111MODULE: "on"
+  GOLANG_VERSION: "1.23"
+  GOLANGCI_LINT_VERSION: v1.63.4
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOLANG_VERSION }}
+
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Run linters
+        run: make lint
+
+      - name: Build binary
+        run: make build
+
+      - name: Run unit tests
+        run: make test

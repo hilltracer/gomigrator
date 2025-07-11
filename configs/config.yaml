@@ -1,0 +1,10 @@
+logger:
+  level: "ino" # info | error
+
+storage.pg:
+  host: "localhost"
+  port: 5432
+  user: "gomigrator_user"
+  dbname: "gomigrator"
+  password_env: "GOMIGRATOR_DB_PASSWORD" # export GOMIGRATOR_DB_PASSWORD=XXX
+  sslmode: "disable"
