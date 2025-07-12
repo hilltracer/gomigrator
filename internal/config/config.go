@@ -1,6 +1,9 @@
 package config
 
 import (
+	"os"
+	"strings"
+
 	"github.com/spf13/viper"
 )
 
@@ -14,11 +17,6 @@ type LoggerConf struct {
 }
 
 type StorageConf struct {
-	Type string `mapstructure:"type"` // memory | sql
-	PG   PGConf `mapstructure:"pg"`
-}
-
-type PGConf struct {
 	Host        string `mapstructure:"host"`
 	Port        int    `mapstructure:"port"`
 	User        string `mapstructure:"user"`
@@ -27,15 +25,26 @@ type PGConf struct {
 	SSLMode     string `mapstructure:"sslmode"`
 }
 
-func NewConfig(path string) (Config, error) {
-	v := viper.New()
-	v.SetConfigFile(path)
-	if err := v.ReadInConfig(); err != nil {
+func New(path string) (Config, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
 		return Config{}, err
 	}
+	data := os.ExpandEnv(string(raw))
+
+	v := viper.New()
+	v.SetConfigType("yaml")
+	if err := v.ReadConfig(strings.NewReader(data)); err != nil {
+		return Config{}, err
+	}
+
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return Config{}, err
 	}
+	if cfg.Logger.Level == "" {
+		cfg.Logger.Level = "info"
+	}
+
 	return cfg, nil
 }

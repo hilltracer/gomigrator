@@ -3,31 +3,32 @@ package logger
 import (
 	"log"
 	"os"
+	"runtime"
 	"strings"
 )
 
-type level int
+type Level int
 
 const (
-	errorLvl level = iota
-	infoLvl
-	debugLvl
+	levelError Level = iota
+	levelInfo
+	levelDebug
 )
 
-func parseLevel(s string) level {
+func parseLevel(s string) Level {
 	switch strings.ToLower(s) {
 	case "debug":
-		return debugLvl
+		return levelDebug
 	case "info":
-		return infoLvl
+		return levelInfo
 	default:
-		return errorLvl
+		return levelError
 	}
 }
 
 type Logger struct {
 	l     *log.Logger
-	level level
+	level Level
 }
 
 func New(lvl string) *Logger {
@@ -37,9 +38,26 @@ func New(lvl string) *Logger {
 	}
 }
 
-func (l *Logger) Info(msg string) {
-	if l.level >= infoLvl {
-		l.l.Println("INFO:", msg)
+func (lg *Logger) Debug(msg string) {
+	if lg.level >= levelDebug {
+		_, file, line, _ := runtime.Caller(1)
+		lg.l.Printf("DEBUG: %s:%d %s\n", short(file), line, msg)
 	}
 }
-func (l *Logger) Error(msg string) { l.l.Println("ERROR:", msg) }
+
+func (lg *Logger) Info(msg string) {
+	if lg.level >= levelInfo {
+		lg.l.Println("INFO:", msg)
+	}
+}
+
+func (lg *Logger) Error(msg string) {
+	lg.l.Println("ERROR:", msg)
+}
+
+func short(p string) string {
+	if idx := strings.LastIndex(p, "/"); idx != -1 {
+		return p[idx+1:]
+	}
+	return p
+}

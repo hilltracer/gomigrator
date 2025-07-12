@@ -1,10 +1,10 @@
 logger:
-  level: "ino" # info | error
+  level: "${LOG_LEVEL}"
 
-storage.pg:
+storage:
   host: "localhost"
   port: 5432
   user: "gomigrator_user"
   dbname: "gomigrator"
-  password_env: "GOMIGRATOR_DB_PASSWORD" # export GOMIGRATOR_DB_PASSWORD=XXX
+  password_env: "${GOMIGRATOR_DB_PASSWORD}"
   sslmode: "disable"

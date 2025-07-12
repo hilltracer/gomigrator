@@ -1,4 +1,4 @@
-package sqlstorage
+package storage
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/hilltracer/otus-go/hw12_13_14_15_calendar/internal/storage"
 	"github.com/jmoiron/sqlx"
 )
 

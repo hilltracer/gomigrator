@@ -1,4 +1,4 @@
-package sqlstorage
+package storage
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hilltracer/otus-go/hw12_13_14_15_calendar/internal/storage"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq" // postgres driver
 )
@@ -39,7 +38,7 @@ func Connect(ctx context.Context, dsn string) (*Storage, error) {
 
 func (s *Storage) Close(_ context.Context) error { return s.db.Close() }
 
-func (s *Storage) CreateEvent(ctx context.Context, e storage.Event) error {
+func (s *Storage) CreateEvent(ctx context.Context, e Event) error {
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
@@ -56,7 +55,7 @@ func (s *Storage) CreateEvent(ctx context.Context, e storage.Event) error {
 		return err
 	}
 	if exists {
-		return storage.ErrDateBusy
+		return ErrDateBusy
 	}
 
 	// insert
@@ -77,7 +76,7 @@ func (s *Storage) CreateEvent(ctx context.Context, e storage.Event) error {
 	return tx.Commit()
 }
 
-func (s *Storage) UpdateEvent(ctx context.Context, e storage.Event) error {
+func (s *Storage) UpdateEvent(ctx context.Context, e Event) error {
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
@@ -88,7 +87,7 @@ func (s *Storage) UpdateEvent(ctx context.Context, e storage.Event) error {
 	var origCount int
 	if err = tx.GetContext(ctx, &origCount, `SELECT 1 FROM events WHERE id=$1`, e.ID); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			return storage.ErrNotFound
+			return ErrNotFound
 		}
 		return err
 	}
@@ -103,7 +102,7 @@ func (s *Storage) UpdateEvent(ctx context.Context, e storage.Event) error {
 		return err
 	}
 	if exists {
-		return storage.ErrDateBusy
+		return ErrDateBusy
 	}
 
 	// update
@@ -132,7 +131,7 @@ func (s *Storage) DeleteEvent(ctx context.Context, id string) error {
 	}
 	aff, _ := res.RowsAffected()
 	if aff == 0 {
-		return storage.ErrNotFound
+		return ErrNotFound
 	}
 	return nil
 }
@@ -141,30 +140,30 @@ const baseSelect = `SELECT id, title, start_time, duration, description, user_id
                     FROM events WHERE user_id=$1 AND start_time >= $2 AND start_time < $3
                     ORDER BY start_time`
 
-func (s *Storage) ListDay(ctx context.Context, userID string, date time.Time) ([]storage.Event, error) {
+func (s *Storage) ListDay(ctx context.Context, userID string, date time.Time) ([]Event, error) {
 	from := date.Truncate(24 * time.Hour)
 	to := from.Add(24 * time.Hour)
-	var out []storage.Event
+	var out []Event
 	if err := s.db.SelectContext(ctx, &out, baseSelect, userID, from, to); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (s *Storage) ListWeek(ctx context.Context, userID string, weekStart time.Time) ([]storage.Event, error) {
+func (s *Storage) ListWeek(ctx context.Context, userID string, weekStart time.Time) ([]Event, error) {
 	from := weekStart.Truncate(24 * time.Hour)
 	to := from.AddDate(0, 0, 7)
-	var out []storage.Event
+	var out []Event
 	if err := s.db.SelectContext(ctx, &out, baseSelect, userID, from, to); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (s *Storage) ListMonth(ctx context.Context, userID string, monthStart time.Time) ([]storage.Event, error) {
+func (s *Storage) ListMonth(ctx context.Context, userID string, monthStart time.Time) ([]Event, error) {
 	from := time.Date(monthStart.Year(), monthStart.Month(), 1, 0, 0, 0, 0, monthStart.Location())
 	to := from.AddDate(0, 1, 0)
-	var out []storage.Event
+	var out []Event
 	if err := s.db.SelectContext(ctx, &out, baseSelect, userID, from, to); err != nil {
 		return nil, err
 	}

@@ -1,72 +1,74 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
-	"github.com/hilltracer/gomigrator/internal/app"
 	"github.com/hilltracer/gomigrator/internal/config"
 	"github.com/hilltracer/gomigrator/internal/logger"
-	"github.com/hilltracer/gomigrator/internal/storage"
 )
 
-var configFile string
+var (
+	configFile string
+	logLevel   string
+)
 
 func init() {
-	flag.StringVar(&configFile, "config", "/etc/calendar/config.yaml", "Path to configuration file")
+	flag.StringVar(&configFile, "config", "configs/config.yaml", "Path to configuration file")
+	flag.StringVar(&logLevel, "log-level", "", "Override log level from config (debug|info|error)")
+	flag.Usage = func() {
+		out := flag.CommandLine.Output()
+		fmt.Fprintf(out, "Usage: %s [global flags] <command> [args]\n\n", os.Args[0])
+		fmt.Fprintln(out, "Commands:")
+		fmt.Fprintln(out, "  create <name>   Generate a new migration file")
+		fmt.Fprintln(out, "  up              Apply pending migrations")
+		fmt.Fprintln(out, "  down            Rollback last migration")
+		fmt.Fprintln(out, "  redo            Rollback + re-apply last migration")
+		fmt.Fprintln(out, "  status          Show migration status table")
+		fmt.Fprintln(out, "  dbversion       Print current DB version")
+		fmt.Fprintln(out, "  version         Print gomigrator version")
+		fmt.Fprintln(out, "  help            Print this message")
+		flag.PrintDefaults()
+	}
 }
 
-func main() {
-	os.Exit(run())
-}
+func main() { os.Exit(run()) }
 
 func run() int {
+	/* ---------- parse only global flags ---------- */
 	flag.Parse()
-
-	if flag.Arg(0) == "version" {
-		printVersion()
-		return 0
-	}
-
-	cfg, err := config.NewConfig(configFile)
-	if err != nil {
-		fmt.Printf("failed to read config: %v\n", err)
+	if flag.NArg() == 0 {
+		flag.Usage()
 		return 1
+	}
+	cmd := flag.Arg(0)
+
+	/* ---------- config ---------- */
+	cfg, err := config.New(configFile) // ← with ExpandEnv
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
+		return 1
+	}
+	if logLevel != "" {
+		cfg.Logger.Level = logLevel
 	}
 
 	logg := logger.New(cfg.Logger.Level)
+	logg.Debug("configuration loaded from " + configFile)
 
-	ctx, cancel := signal.NotifyContext(context.Background(),
-		syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-	defer cancel()
-
-	var storage storage.Repository
-	switch cfg.Storage.Type {
-	case "sql":
-		pwd := os.Getenv(cfg.Storage.PG.PasswordEnv)
-		dsn := fmt.Sprintf(
-			"postgresql://%s:%s@%s:%d/%s?sslmode=%s",
-			cfg.Storage.PG.User, pwd, cfg.Storage.PG.Host, cfg.Storage.PG.Port, cfg.Storage.PG.DBName, cfg.Storage.PG.SSLMode,
-		)
-		pgStore, err := sqlstorage.Connect(ctx, dsn)
-		if err != nil {
-			logg.Error("db connect: " + err.Error())
-			return 1
-		}
-		storage = pgStore
+	switch cmd {
+	case "help":
+		flag.Usage()
+	case "version":
+		printVersion()
+	case "create", "up", "down", "redo", "status", "dbversion":
+		logg.Info("command " + cmd + " is not implemented yet (stub)")
 	default:
-		storage = memorystorage.New() // no needed
+		logg.Error("unknown command: " + cmd)
+		flag.Usage()
+		return 1
 	}
-
-	migrator := app.New(logg, storage) // not used
-
-	logg.Info("gomigrator is running...")
-
-	<-ctx.Done()
 
 	return 0
 }
