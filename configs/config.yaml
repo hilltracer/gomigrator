@@ -1,10 +1,10 @@
 logger:
-  level: "${LOG_LEVEL}"
+  level: $LOG_LEVEL
 
 storage:
-  host: "localhost"
-  port: 5432
-  user: "gomigrator_user"
-  dbname: "gomigrator"
-  password_env: "${GOMIGRATOR_DB_PASSWORD}"
-  sslmode: "disable"
+  dsn: "host=$PG_HOST \
+        port=$PG_PORT \
+        user=$PG_USER \
+        password=$PG_PASSWORD \
+        dbname=$PG_DB \
+        sslmode=$PG_SSLMODE"

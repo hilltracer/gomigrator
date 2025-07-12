@@ -8,21 +8,13 @@ import (
 )
 
 type Config struct {
-	Logger  LoggerConf  `mapstructure:"logger"`
-	Storage StorageConf `mapstructure:"storage"`
-}
+	Logger struct {
+		Level string `mapstructure:"level"`
+	} `mapstructure:"logger"`
 
-type LoggerConf struct {
-	Level string `mapstructure:"level"`
-}
-
-type StorageConf struct {
-	Host        string `mapstructure:"host"`
-	Port        int    `mapstructure:"port"`
-	User        string `mapstructure:"user"`
-	DBName      string `mapstructure:"dbname"`
-	PasswordEnv string `mapstructure:"password_env"`
-	SSLMode     string `mapstructure:"sslmode"`
+	Storage struct {
+		DSN string `mapstructure:"dsn"` // string «host=… port=…»
+	} `mapstructure:"storage"`
 }
 
 func New(path string) (Config, error) {
@@ -30,6 +22,7 @@ func New(path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	// expand data variables
 	data := os.ExpandEnv(string(raw))
 
 	v := viper.New()
@@ -45,6 +38,5 @@ func New(path string) (Config, error) {
 	if cfg.Logger.Level == "" {
 		cfg.Logger.Level = "info"
 	}
-
 	return cfg, nil
 }
