@@ -48,7 +48,7 @@ func init() {
 
 		fmt.Fprintln(out, "\nEnvironment:")
 		fmt.Fprintln(out, "  You can use environment variables in the config file using ${VAR} syntax.")
-		fmt.Fprintln(out, "  Examples: LOG_LEVEL, PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, etc.")
+		fmt.Fprintln(out, "  Available: PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DB, PG_SSLMODE")
 	}
 }
 
@@ -123,62 +123,70 @@ func run() int {
 		logg.Info("Created migration: " + abs)
 
 	case "status", "up", "down", "redo", "dbversion":
-		mig, err := migrator.NewFromDSN(context.Background(), cfg.Storage.DSN, migrationsDir)
-		if err != nil {
-			logg.Error("db connect: " + err.Error())
-			return 1
+		status := performDBOps(cmd, cfg.Storage.DSN, logg)
+		if status != 0 {
+			return status
 		}
-		defer mig.Close()
-
-		switch cmd {
-		case "status":
-			order, applied, err := mig.Status(context.Background())
-			if err != nil {
-				logg.Error(err.Error())
-				return 1
-			}
-			if len(order) == 0 {
-				logg.Info("no migrations found")
-				return 0
-			}
-			for _, v := range order {
-				fmt.Printf("%-14d %v\n", v, applied[v])
-			}
-
-		case "dbversion":
-			v, err := mig.DBVersion(context.Background())
-			if err != nil {
-				logg.Error(err.Error())
-				return 1
-			}
-			fmt.Println(v)
-
-		case "up":
-			if err := mig.Up(context.Background()); err != nil {
-				logg.Error(err.Error())
-				return 1
-			}
-			logg.Info("migrations applied")
-
-		case "down":
-			if err := mig.Down(context.Background()); err != nil {
-				logg.Error(err.Error())
-				return 1
-			}
-			logg.Info("migration rolled back")
-
-		case "redo":
-			if err := mig.Redo(context.Background()); err != nil {
-				logg.Error(err.Error())
-				return 1
-			}
-			logg.Info("migration redone")
-		}
-
 	default:
 		logg.Error("unknown command: " + cmd)
 		flag.Usage()
 		return 1
+	}
+	return 0
+}
+
+func performDBOps(cmd string, dsn string, logg *logger.Logger) int {
+	mig, err := migrator.NewFromDSN(context.Background(), dsn, migrationsDir)
+	if err != nil {
+		logg.Error("db connect: " + err.Error())
+		return 1
+	}
+	defer mig.Close()
+
+	switch cmd {
+	case "status":
+		statuses, err := mig.Status(context.Background())
+		if err != nil {
+			logg.Error(err.Error())
+			return 1
+		}
+		if len(statuses) == 0 {
+			logg.Info("no migrations found")
+			return 0
+		}
+
+		for _, s := range statuses {
+			fmt.Printf("%-14d %v\n", s.Version, s.IsApplied)
+		}
+
+	case "dbversion":
+		v, err := mig.DBVersion(context.Background())
+		if err != nil {
+			logg.Error(err.Error())
+			return 1
+		}
+		fmt.Println(v)
+
+	case "up":
+		if err := mig.Up(context.Background()); err != nil {
+			logg.Error(err.Error())
+			return 1
+		}
+		logg.Info("migrations applied")
+
+	case "down":
+		if err := mig.Down(context.Background()); err != nil {
+			logg.Error(err.Error())
+			return 1
+		}
+		logg.Info("migration rolled back")
+
+	case "redo":
+		if err := mig.Redo(context.Background()); err != nil {
+			logg.Error(err.Error())
+			return 1
+		}
+		logg.Info("migration redone")
 	}
 	return 0
 }

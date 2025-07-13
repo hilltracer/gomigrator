@@ -11,13 +11,18 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// Migrator owns the lifecycle of a sqlstorage.Store.
+// Migrator owns the lifecycle of a sqlstore.
 type Migrator struct {
 	store *sqlstorage.Store
 	dir   string
 }
 
-// New creates a Migrator from an *already-opened* Store (keeps old tests intact).
+type StatusEntry struct {
+	Version   int64
+	IsApplied bool
+}
+
+// New creates a Migrator from an already-opened Store (keeps old tests intact).
 func New(store *sqlstorage.Store, dir string) *Migrator {
 	return &Migrator{store: store, dir: dir}
 }
@@ -149,22 +154,23 @@ func (m *Migrator) Redo(ctx context.Context) error {
 	})
 }
 
-func sortedStatus(applied map[int64]bool) []int64 {
-	vers := make([]int64, 0, len(applied))
-	for v := range applied {
-		vers = append(vers, v)
-	}
-	sort.Slice(vers, func(i, j int) bool { return vers[i] < vers[j] })
-	return vers
-}
-
-// Status reports version ⇒ is_applied, sorted by version for stable output.
-func (m *Migrator) Status(ctx context.Context) ([]int64, map[int64]bool, error) {
+// Status returns sorted migration statuses.
+func (m *Migrator) Status(ctx context.Context) ([]StatusEntry, error) {
 	applied, err := m.store.AppliedVersions(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return sortedStatus(applied), applied, nil
+	entries := make([]StatusEntry, 0, len(applied))
+	for v, ok := range applied {
+		entries = append(entries, StatusEntry{
+			Version:   v,
+			IsApplied: ok,
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Version < entries[j].Version
+	})
+	return entries, nil
 }
 
 // DBVersion returns the highest applied version or 0 if none.

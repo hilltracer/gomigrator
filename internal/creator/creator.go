@@ -21,7 +21,7 @@ func Create(dir, rawName string) (string, error) {
 	}
 	// Safe file name: replace spaces with underscores, keep alnum & _ only
 	name = strings.Map(func(r rune) rune {
-		if r == ' ' {
+		if r == ' ' || r == '-' {
 			return '_'
 		}
 		if r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' ||
@@ -37,6 +37,7 @@ func Create(dir, rawName string) (string, error) {
 		return "", err
 	}
 	full := filepath.Join(dir, file)
+	//nolint:gosec
 	if err := os.WriteFile(full, []byte(tmpl), 0o644); err != nil {
 		return "", err
 	}

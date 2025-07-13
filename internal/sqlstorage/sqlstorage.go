@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // postgres driver
 )
 
 const metaTableDDL = `
@@ -20,6 +20,14 @@ CREATE TABLE IF NOT EXISTS gomigrator_schema_migrations (
 type Store struct {
 	db     *sqlx.DB
 	lockID int64 // pg_advisory_lock(key)
+}
+
+// NewWithMock is only for tests; allows injection of custom DB.
+func NewWithMock(db *sqlx.DB, lockID int64) *Store {
+	return &Store{
+		db:     db,
+		lockID: lockID,
+	}
 }
 
 func Connect(ctx context.Context, dsn string) (*Store, error) {
@@ -42,7 +50,7 @@ func Connect(ctx context.Context, dsn string) (*Store, error) {
 }
 func (s *Store) Close() error { return s.db.Close() }
 
-// Take advisory-lock, start transaction, call fn and commit
+// Take advisory-lock, start transaction, call fn and commit.
 func (s *Store) WithExclusive(ctx context.Context, fn func(*sqlx.Tx) error) error {
 	if err := s.acquireLock(ctx); err != nil {
 		return err
@@ -81,7 +89,7 @@ func (s *Store) AppliedVersions(ctx context.Context) (map[int64]bool, error) {
 	return res, rows.Err()
 }
 
-// Add migration record
+// Add migration record.
 func (s *Store) MarkApplied(ctx context.Context, tx *sqlx.Tx, version int64, name string) error {
 	_, err := tx.ExecContext(ctx,
 		`INSERT INTO gomigrator_schema_migrations (version, name, is_applied)
@@ -91,29 +99,30 @@ func (s *Store) MarkApplied(ctx context.Context, tx *sqlx.Tx, version int64, nam
 	return err
 }
 
-// Remove migration record
+// Remove migration record.
 func (s *Store) MarkRolledBack(ctx context.Context, tx *sqlx.Tx, version int64) error {
 	_, err := tx.ExecContext(ctx,
 		`DELETE FROM gomigrator_schema_migrations WHERE version = $1`, version)
 	return err
 }
 
-// Create meta table if not exists
+// Create meta table if not exists.
 func (s *Store) ensureMetaTable(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, metaTableDDL)
 	return err
 }
 
-// Manage advisory locks
+// Manage advisory locks.
 func (s *Store) acquireLock(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, "SELECT pg_advisory_lock($1)", s.lockID)
 	return err
 }
+
 func (s *Store) releaseLock(ctx context.Context) {
 	_, _ = s.db.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", s.lockID)
 }
 
-// Take a hash of the key to use as an advisory lock ID
+// Take a hash of the key to use as an advisory lock ID.
 func hashLockID(key string) int64 {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(key))
