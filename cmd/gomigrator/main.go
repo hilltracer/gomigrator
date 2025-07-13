@@ -11,7 +11,7 @@ import (
 	"github.com/hilltracer/gomigrator/internal/config"
 	"github.com/hilltracer/gomigrator/internal/creator"
 	"github.com/hilltracer/gomigrator/internal/logger"
-	"github.com/hilltracer/gomigrator/internal/sqlstorage"
+	"github.com/hilltracer/gomigrator/internal/migrator"
 )
 
 var (
@@ -27,21 +27,22 @@ func init() {
 	flag.Usage = func() {
 		out := flag.CommandLine.Output()
 		fmt.Fprintf(out, "Usage:\n")
-		fmt.Fprintf(out, "  %s [flags] [DSN] <command>\n\n", os.Args[0])
-		fmt.Fprintln(out, "\nFlags:")
+		fmt.Fprintf(out, "  %s [flags] [dsn] <command>\n\n", os.Args[0])
+		fmt.Fprintln(out, "Flags:")
 		flag.PrintDefaults()
 
-		fmt.Fprintln(out, "DSN                  Optional. PostgreSQL connection string in the form:")
-		fmt.Fprintln(out, "                     \"host=... port=... user=... password=... dbname=... sslmode=...\"")
-		fmt.Fprintln(out, "                     If omitted, DSN is loaded from the config file.")
+		fmt.Fprintln(out, "\nDsn:")
+		fmt.Fprintln(out, "  Optional. PostgreSQL connection string in the form:")
+		fmt.Fprintln(out, "  \"host=... port=... user=... password=... dbname=... sslmode=...\"")
+		fmt.Fprintln(out, "  If omitted, dsn is loaded from the config file.")
 
-		fmt.Fprintln(out, "\nCommands:")
+		fmt.Fprintln(out, "\nCommand:")
 		fmt.Fprintln(out, "  create <name>      Generate a new migration file (no DB connection needed)")
 		fmt.Fprintln(out, "  up                 Apply all pending migrations")
 		fmt.Fprintln(out, "  down               Rollback the last applied migration")
 		fmt.Fprintln(out, "  redo               Rollback and re-apply the last migration")
 		fmt.Fprintln(out, "  status             Print the status of all migrations")
-		fmt.Fprintln(out, "  dbversion          Show the current DB version")
+		fmt.Fprintln(out, "  dbversion          Show the current DB version (or 0 if none)")
 		fmt.Fprintln(out, "  version            Print gomigrator version")
 		fmt.Fprintln(out, "  help               Print this help message")
 
@@ -96,8 +97,10 @@ func run() int {
 	switch cmd {
 	case "help":
 		flag.Usage()
+
 	case "version":
 		printVersion()
+
 	case "create":
 		// args offset depends on whether DSN was passed
 		var nameIdx int
@@ -117,37 +120,61 @@ func run() int {
 			return 1
 		}
 		abs, _ := filepath.Abs(filePath)
-		logg.Info("Create sql migration by template")
-		fmt.Println("Created migration:", abs)
+		logg.Info("Created migration: " + abs)
+
 	case "status", "up", "down", "redo", "dbversion":
-		// подключаемся к БД только если команда известна и требует подключения
-		store, err := sqlstorage.Connect(context.Background(), cfg.Storage.DSN)
+		mig, err := migrator.NewFromDSN(context.Background(), cfg.Storage.DSN, migrationsDir)
 		if err != nil {
 			logg.Error("db connect: " + err.Error())
 			return 1
 		}
-		defer store.Close()
+		defer mig.Close()
 
 		switch cmd {
 		case "status":
-			versions, err := store.AppliedVersions(context.Background())
+			order, applied, err := mig.Status(context.Background())
 			if err != nil {
-				logg.Error("status: " + err.Error())
+				logg.Error(err.Error())
 				return 1
 			}
-			if len(versions) == 0 {
+			if len(order) == 0 {
 				logg.Info("no migrations found")
 				return 0
 			}
-			logg.Info("print status of migrations")
-			for v, ok := range versions {
-				logg.Info("print status of migrations")
-				fmt.Printf("%d\t%v\n", v, ok)
+			for _, v := range order {
+				fmt.Printf("%-14d %v\n", v, applied[v])
 			}
 
-		case "up", "down", "redo", "dbversion":
-			logg.Info("command " + cmd + " is not implemented yet")
+		case "dbversion":
+			v, err := mig.DBVersion(context.Background())
+			if err != nil {
+				logg.Error(err.Error())
+				return 1
+			}
+			fmt.Println(v)
+
+		case "up":
+			if err := mig.Up(context.Background()); err != nil {
+				logg.Error(err.Error())
+				return 1
+			}
+			logg.Info("migrations applied")
+
+		case "down":
+			if err := mig.Down(context.Background()); err != nil {
+				logg.Error(err.Error())
+				return 1
+			}
+			logg.Info("migration rolled back")
+
+		case "redo":
+			if err := mig.Redo(context.Background()); err != nil {
+				logg.Error(err.Error())
+				return 1
+			}
+			logg.Info("migration redone")
 		}
+
 	default:
 		logg.Error("unknown command: " + cmd)
 		flag.Usage()
