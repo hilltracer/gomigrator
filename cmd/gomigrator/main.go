@@ -5,21 +5,25 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/hilltracer/gomigrator/internal/config"
+	"github.com/hilltracer/gomigrator/internal/creator"
 	"github.com/hilltracer/gomigrator/internal/logger"
 	"github.com/hilltracer/gomigrator/internal/sqlstorage"
 )
 
 var (
-	configFile string
-	logLevel   string
+	configFile    string
+	logLevel      string
+	migrationsDir string
 )
 
 func init() {
 	flag.StringVar(&configFile, "config", "configs/config.yaml", "Path to configuration file (YAML)")
-	flag.StringVar(&logLevel, "log-level", "", "Override log level from config (debug|info|error)")
+	flag.StringVar(&logLevel, "log-level", "info", "Override log level from config (debug|info|error)")
+	flag.StringVar(&migrationsDir, "dir", "migrations", "Directory for SQL migration files")
 	flag.Usage = func() {
 		out := flag.CommandLine.Output()
 		fmt.Fprintf(out, "Usage:\n")
@@ -27,7 +31,7 @@ func init() {
 		fmt.Fprintln(out, "\nFlags:")
 		flag.PrintDefaults()
 
-		fmt.Fprintln(out, "  DSN                Optional. PostgreSQL connection string in the form:")
+		fmt.Fprintln(out, "DSN                  Optional. PostgreSQL connection string in the form:")
 		fmt.Fprintln(out, "                     \"host=... port=... user=... password=... dbname=... sslmode=...\"")
 		fmt.Fprintln(out, "                     If omitted, DSN is loaded from the config file.")
 
@@ -89,48 +93,65 @@ func run() int {
 		logg.Debug("using DSN from CLI: " + dsn)
 	}
 
-	// ---------- CMDs without db connection ----------
 	switch cmd {
 	case "help":
 		flag.Usage()
-		return 0
 	case "version":
 		printVersion()
-		return 0
 	case "create":
-		logg.Info("create command is not implemented yet")
-		return 0
-	}
-
-	// ---------- CMDs with db connection ----------
-	store, err := sqlstorage.Connect(context.Background(), cfg.Storage.DSN)
-	if err != nil {
-		logg.Error("db connect: " + err.Error())
-		return 1
-	}
-	defer store.Close()
-
-	switch cmd {
-	case "status":
-		versions, err := store.AppliedVersions(context.Background())
-		if err != nil {
-			logg.Error("status: " + err.Error())
+		// args offset depends on whether DSN was passed
+		var nameIdx int
+		if dsn == "" { // create <name>
+			nameIdx = 1
+		} else { // <DSN> create <name>
+			nameIdx = 2
+		}
+		if len(args) <= nameIdx {
+			logg.Error("usage: gomigrator [flags] [DSN] create <name>")
 			return 1
 		}
-		if len(versions) == 0 {
-			fmt.Println("no migrations found")
-			return 0
+
+		filePath, err := creator.Create(migrationsDir, args[nameIdx])
+		if err != nil {
+			logg.Error("create: " + err.Error())
+			return 1
 		}
-		for v, ok := range versions {
-			fmt.Printf("%d\t%v\n", v, ok)
+		abs, _ := filepath.Abs(filePath)
+		logg.Info("Create sql migration by template")
+		fmt.Println("Created migration:", abs)
+	case "status", "up", "down", "redo", "dbversion":
+		// подключаемся к БД только если команда известна и требует подключения
+		store, err := sqlstorage.Connect(context.Background(), cfg.Storage.DSN)
+		if err != nil {
+			logg.Error("db connect: " + err.Error())
+			return 1
 		}
-	case "up", "down", "redo", "dbversion":
-		logg.Info("command " + cmd + " is not implemented yet")
+		defer store.Close()
+
+		switch cmd {
+		case "status":
+			versions, err := store.AppliedVersions(context.Background())
+			if err != nil {
+				logg.Error("status: " + err.Error())
+				return 1
+			}
+			if len(versions) == 0 {
+				logg.Info("no migrations found")
+				return 0
+			}
+			logg.Info("print status of migrations")
+			for v, ok := range versions {
+				logg.Info("print status of migrations")
+				fmt.Printf("%d\t%v\n", v, ok)
+			}
+
+		case "up", "down", "redo", "dbversion":
+			logg.Info("command " + cmd + " is not implemented yet")
+		}
 	default:
 		logg.Error("unknown command: " + cmd)
 		flag.Usage()
 		return 1
 	}
-
 	return 0
 }

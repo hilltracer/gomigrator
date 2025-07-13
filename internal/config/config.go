@@ -35,8 +35,5 @@ func New(path string) (Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return Config{}, err
 	}
-	if cfg.Logger.Level == "" {
-		cfg.Logger.Level = "info"
-	}
 	return cfg, nil
 }
