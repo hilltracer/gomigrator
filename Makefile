@@ -36,6 +36,4 @@ lint: install-lint-deps
 test:
 	go test -race -count=100 ./...
 
-ci: lint test build
-
 .PHONY: build run build-img run-img lint test ci
