@@ -42,4 +42,4 @@ jobs:
         run: make integration-test
 
       - name: Cleanup Docker containers
-        run: docker-compose -f docker-compose.test.yml down -v
+        run: docker-compose down -v
