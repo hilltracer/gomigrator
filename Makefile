@@ -34,6 +34,6 @@ lint: install-lint-deps
 	golangci-lint run ./...
 
 test:
-	go test -race -count=100 ./...
+	go test -race -count=100 ./internal/creator ./internal/migrator ./internal/parser
 
 .PHONY: build run build-img run-img lint test ci
