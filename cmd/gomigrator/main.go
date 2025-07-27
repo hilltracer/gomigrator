@@ -9,9 +9,8 @@ import (
 	"strings"
 
 	"github.com/hilltracer/gomigrator/internal/config"
-	"github.com/hilltracer/gomigrator/internal/creator"
 	"github.com/hilltracer/gomigrator/internal/logger"
-	"github.com/hilltracer/gomigrator/internal/migrator"
+	"github.com/hilltracer/gomigrator/pkg/gomigrator"
 )
 
 var (
@@ -114,7 +113,7 @@ func run() int {
 			return 1
 		}
 
-		filePath, err := creator.Create(migrationsDir, args[nameIdx])
+		filePath, err := gomigrator.Create(migrationsDir, args[nameIdx])
 		if err != nil {
 			logg.Error("create: " + err.Error())
 			return 1
@@ -136,7 +135,11 @@ func run() int {
 }
 
 func performDBOps(cmd string, dsn string, logg *logger.Logger) int {
-	mig, err := migrator.NewFromDSN(context.Background(), dsn, migrationsDir)
+	// mig, err := GoMigrator.NewFromDSN(context.Background(), dsn, migrationsDir)
+	mig, err := gomigrator.New(context.Background(), gomigrator.Config{
+		DSN: dsn,
+		Dir: migrationsDir,
+	})
 	if err != nil {
 		logg.Error("db connect: " + err.Error())
 		return 1

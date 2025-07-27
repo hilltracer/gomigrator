@@ -22,6 +22,7 @@ linters-settings:
           - github.com/hilltracer/gomigrator/internal/migrator
           - github.com/hilltracer/gomigrator/internal/parser
           - github.com/hilltracer/gomigrator/internal/sqlstorage
+          - github.com/hilltracer/gomigrator/pkg/gomigrator
       Test:
         files:
           - $test

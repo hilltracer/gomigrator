@@ -22,12 +22,12 @@ type StatusEntry struct {
 	IsApplied bool
 }
 
-// New creates a Migrator from an already-opened Store (keeps old tests intact).
+// Creates a Migrator from an already-opened Store (keeps old tests intact).
 func New(store *sqlstorage.Store, dir string) *Migrator {
 	return &Migrator{store: store, dir: dir}
 }
 
-// NewFromDSN is handy for CLI and integration-tests.
+// Open connection to the database and return a Migrator instance.
 func NewFromDSN(ctx context.Context, dsn, dir string) (*Migrator, error) {
 	store, err := sqlstorage.Connect(ctx, dsn)
 	if err != nil {
@@ -51,7 +51,7 @@ func isExecutableSQL(sql string) bool {
 	return false
 }
 
-// Up applies every {is_applied = false} migration.
+// Applies every {is_applied = false} migration.
 func (m *Migrator) Up(ctx context.Context) error {
 	all, err := parser.ParseDir(m.dir)
 	if err != nil {
@@ -81,7 +81,7 @@ func (m *Migrator) Up(ctx context.Context) error {
 	})
 }
 
-// lastAppliedMigration returns the highest-applied migration file.
+// Returns the highest-applied migration file.
 // If no migration was applied yet, it returns (nil, nil).
 func (m *Migrator) lastAppliedMigration(ctx context.Context) (*parser.Migration, error) {
 	applied, err := m.store.AppliedVersions(ctx)
@@ -109,7 +109,7 @@ func (m *Migrator) lastAppliedMigration(ctx context.Context) (*parser.Migration,
 	return nil, fmt.Errorf("migration file for version %d not found", last)
 }
 
-// Down rolls back the latest applied migration.
+// Rolls back the latest applied migration.
 func (m *Migrator) Down(ctx context.Context) error {
 	mig, err := m.lastAppliedMigration(ctx)
 	if err != nil {
@@ -154,7 +154,7 @@ func (m *Migrator) Redo(ctx context.Context) error {
 	})
 }
 
-// Status returns sorted migration statuses.
+// Returns sorted migration statuses.
 func (m *Migrator) Status(ctx context.Context) ([]StatusEntry, error) {
 	applied, err := m.store.AppliedVersions(ctx)
 	if err != nil {
@@ -173,7 +173,7 @@ func (m *Migrator) Status(ctx context.Context) ([]StatusEntry, error) {
 	return entries, nil
 }
 
-// DBVersion returns the highest applied version or 0 if none.
+// Returns the highest applied version or 0 if none.
 func (m *Migrator) DBVersion(ctx context.Context) (int64, error) {
 	applied, err := m.store.AppliedVersions(ctx)
 	if err != nil {
