@@ -3,7 +3,7 @@ name: gomigrator CI
 on:
   push:
     branches:
-      - master
+      - wip
 
 env:
   GO111MODULE: "on"
