@@ -31,6 +31,9 @@ func helper(t *testing.T, upSQL, downSQL string, applied bool) (*Migrator, sqlmo
 	// mock DB
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	require.NoError(t, err)
+
+	mock.MatchExpectationsInOrder(false)
+
 	dbx := sqlx.NewDb(db, "gomigrator")
 
 	store := sqlstorage.NewWithMock(dbx, 42)

@@ -57,12 +57,12 @@ func (m *Migrator) Up(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	applied, err := m.store.AppliedVersions(ctx)
-	if err != nil {
-		return err
-	}
 
 	return m.store.WithExclusive(ctx, func(tx *sqlx.Tx) error {
+		applied, err := m.store.AppliedVersions(ctx)
+		if err != nil {
+			return err
+		}
 		for _, mig := range all {
 			if applied[mig.Version] { // already done
 				continue
@@ -111,18 +111,18 @@ func (m *Migrator) lastAppliedMigration(ctx context.Context) (*parser.Migration,
 
 // Rolls back the latest applied migration.
 func (m *Migrator) Down(ctx context.Context) error {
-	mig, err := m.lastAppliedMigration(ctx)
-	if err != nil {
-		return err
-	}
-	if mig == nil {
-		return nil // nothing applied yet
-	}
-	if !isExecutableSQL(mig.DownSQL) {
-		return fmt.Errorf("%s has empty Down block (cannot rollback)", mig.Name)
-	}
-
 	return m.store.WithExclusive(ctx, func(tx *sqlx.Tx) error {
+		mig, err := m.lastAppliedMigration(ctx)
+		if err != nil {
+			return err
+		}
+		if mig == nil {
+			return nil // nothing applied yet
+		}
+		if !isExecutableSQL(mig.DownSQL) {
+			return fmt.Errorf("%s has empty Down block (cannot rollback)", mig.Name)
+		}
+
 		if _, err := tx.ExecContext(ctx, mig.DownSQL); err != nil {
 			return fmt.Errorf("down %s: %w", mig.Name, err)
 		}
@@ -132,18 +132,17 @@ func (m *Migrator) Down(ctx context.Context) error {
 
 // Redo = Down + Up of the last migration, in a single transaction.
 func (m *Migrator) Redo(ctx context.Context) error {
-	mig, err := m.lastAppliedMigration(ctx)
-	if err != nil {
-		return err
-	}
-	if mig == nil {
-		return nil // nothing to redo
-	}
-	if !isExecutableSQL(mig.UpSQL) || !isExecutableSQL(mig.DownSQL) {
-		return fmt.Errorf("%s must have both Up and Down blocks for redo", mig.Name)
-	}
-
 	return m.store.WithExclusive(ctx, func(tx *sqlx.Tx) error {
+		mig, err := m.lastAppliedMigration(ctx)
+		if err != nil {
+			return err
+		}
+		if mig == nil {
+			return nil // nothing to redo
+		}
+		if !isExecutableSQL(mig.UpSQL) || !isExecutableSQL(mig.DownSQL) {
+			return fmt.Errorf("%s must have both Up and Down blocks for redo", mig.Name)
+		}
 		if _, err := tx.ExecContext(ctx, mig.DownSQL); err != nil {
 			return fmt.Errorf("redo-down %s: %w", mig.Name, err)
 		}

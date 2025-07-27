@@ -14,16 +14,6 @@ build:
 run: build
 	$(BIN) -config ./configs/config.yaml
 
-## ---------- docker ----------
-build-img:
-	docker build \
-		--build-arg=LDFLAGS="$(LDFLAGS)" \
-		-t $(DOCKER_IMG) \
-		-f build/Dockerfile .
-
-run-img: build-img
-	docker run $(DOCKER_IMG)
-
 ## ---------- tests & lint ----------
 install-lint-deps:
 	(which golangci-lint > /dev/null) || \
@@ -36,4 +26,9 @@ lint: install-lint-deps
 test:
 	go test -race -count=100 ./internal/creator ./internal/migrator ./internal/parser
 
-.PHONY: build run build-img run-img lint test ci
+
+## ---------- integration tests inside docker ----------
+integration-test: build
+	@./scripts/integration_test.sh
+
+.PHONY: build run build-img run-img lint test integration-test 
