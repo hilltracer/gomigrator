@@ -1,0 +1,90 @@
+run:
+  tests: true
+
+linters-settings:
+  funlen:
+    lines: 150
+    statements: 80
+  depguard:
+    rules:
+      Main:
+        files:
+          - $all
+          - "!$test"
+        allow:
+          - $gostd
+          - github.com/spf13/viper
+          - github.com/jmoiron/sqlx
+          - github.com/lib/pq
+          - github.com/hilltracer/gomigrator/internal/config
+          - github.com/hilltracer/gomigrator/internal/creator
+          - github.com/hilltracer/gomigrator/internal/logger
+          - github.com/hilltracer/gomigrator/internal/migrator
+          - github.com/hilltracer/gomigrator/internal/parser
+          - github.com/hilltracer/gomigrator/internal/sqlstorage
+          - github.com/hilltracer/gomigrator/pkg/gomigrator
+      Test:
+        files:
+          - $test
+        allow:
+          - $gostd
+          - github.com/stretchr/testify
+          - github.com/DATA-DOG/go-sqlmock
+          - github.com/jmoiron/sqlx
+          - github.com/hilltracer/gomigrator/internal/sqlstorage
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - dupl
+        - gocyclo
+        - gosec
+
+linters:
+  disable-all: true
+  enable:
+    - asciicheck
+    - depguard
+    - dogsled
+    - dupl
+    - bodyclose
+    - durationcheck
+    - errorlint
+    - exhaustive
+    - copyloopvar
+    - funlen
+    - gci
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gofmt
+    - gofumpt
+    - goheader
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - importas
+    - ineffassign
+    - lll
+    - makezero
+    - misspell
+    - nestif
+    - nilerr
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - staticcheck
+    - stylecheck
+    - tagliatelle
+    - thelper
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace

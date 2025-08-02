@@ -1,0 +1,188 @@
+package migrator
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/hilltracer/gomigrator/internal/parser"
+	"github.com/hilltracer/gomigrator/internal/sqlstorage"
+	"github.com/jmoiron/sqlx"
+)
+
+// Migrator owns the lifecycle of a sqlstore.
+type Migrator struct {
+	store *sqlstorage.Store
+	dir   string
+}
+
+type StatusEntry struct {
+	Version   int64
+	IsApplied bool
+}
+
+// Creates a Migrator from an already-opened Store (keeps old tests intact).
+func New(store *sqlstorage.Store, dir string) *Migrator {
+	return &Migrator{store: store, dir: dir}
+}
+
+// Open connection to the database and return a Migrator instance.
+func NewFromDSN(ctx context.Context, dsn, dir string) (*Migrator, error) {
+	store, err := sqlstorage.Connect(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+	return &Migrator{store: store, dir: dir}, nil
+}
+
+func (m *Migrator) Close() error { return m.store.Close() }
+
+func isExecutableSQL(sql string) bool {
+	lines := strings.Split(sql, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		// line is not empty and doesn't start with comment: assume real SQL
+		return true
+	}
+	return false
+}
+
+// Applies every {is_applied = false} migration.
+func (m *Migrator) Up(ctx context.Context) error {
+	all, err := parser.ParseDir(m.dir)
+	if err != nil {
+		return err
+	}
+
+	return m.store.WithExclusive(ctx, func(tx *sqlx.Tx) error {
+		applied, err := m.store.AppliedVersions(ctx)
+		if err != nil {
+			return err
+		}
+		for _, mig := range all {
+			if applied[mig.Version] { // already done
+				continue
+			}
+			if !isExecutableSQL(mig.UpSQL) {
+				return fmt.Errorf("%s has empty Up block", mig.Name)
+			}
+			if _, err := tx.ExecContext(ctx, mig.UpSQL); err != nil {
+				return fmt.Errorf("up %s: %w", mig.Name, err)
+			}
+			if err := m.store.MarkApplied(ctx, tx, mig.Version, mig.Name); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// Returns the highest-applied migration file.
+// If no migration was applied yet, it returns (nil, nil).
+func (m *Migrator) lastAppliedMigration(ctx context.Context) (*parser.Migration, error) {
+	applied, err := m.store.AppliedVersions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var last int64
+	for v := range applied {
+		if v > last {
+			last = v
+		}
+	}
+	if last == 0 {
+		return nil, nil
+	}
+	all, err := parser.ParseDir(m.dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, mig := range all {
+		if mig.Version == last {
+			return &mig, nil
+		}
+	}
+	return nil, fmt.Errorf("migration file for version %d not found", last)
+}
+
+// Rolls back the latest applied migration.
+func (m *Migrator) Down(ctx context.Context) error {
+	return m.store.WithExclusive(ctx, func(tx *sqlx.Tx) error {
+		mig, err := m.lastAppliedMigration(ctx)
+		if err != nil {
+			return err
+		}
+		if mig == nil {
+			return nil // nothing applied yet
+		}
+		if !isExecutableSQL(mig.DownSQL) {
+			return fmt.Errorf("%s has empty Down block (cannot rollback)", mig.Name)
+		}
+
+		if _, err := tx.ExecContext(ctx, mig.DownSQL); err != nil {
+			return fmt.Errorf("down %s: %w", mig.Name, err)
+		}
+		return m.store.MarkRolledBack(ctx, tx, mig.Version)
+	})
+}
+
+// Redo = Down + Up of the last migration, in a single transaction.
+func (m *Migrator) Redo(ctx context.Context) error {
+	return m.store.WithExclusive(ctx, func(tx *sqlx.Tx) error {
+		mig, err := m.lastAppliedMigration(ctx)
+		if err != nil {
+			return err
+		}
+		if mig == nil {
+			return nil // nothing to redo
+		}
+		if !isExecutableSQL(mig.UpSQL) || !isExecutableSQL(mig.DownSQL) {
+			return fmt.Errorf("%s must have both Up and Down blocks for redo", mig.Name)
+		}
+		if _, err := tx.ExecContext(ctx, mig.DownSQL); err != nil {
+			return fmt.Errorf("redo-down %s: %w", mig.Name, err)
+		}
+		if _, err := tx.ExecContext(ctx, mig.UpSQL); err != nil {
+			return fmt.Errorf("redo-up %s: %w", mig.Name, err)
+		}
+		return m.store.MarkApplied(ctx, tx, mig.Version, mig.Name)
+	})
+}
+
+// Returns sorted migration statuses.
+func (m *Migrator) Status(ctx context.Context) ([]StatusEntry, error) {
+	applied, err := m.store.AppliedVersions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]StatusEntry, 0, len(applied))
+	for v, ok := range applied {
+		entries = append(entries, StatusEntry{
+			Version:   v,
+			IsApplied: ok,
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Version < entries[j].Version
+	})
+	return entries, nil
+}
+
+// Returns the highest applied version or 0 if none.
+func (m *Migrator) DBVersion(ctx context.Context) (int64, error) {
+	applied, err := m.store.AppliedVersions(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var last int64
+	for v, ok := range applied {
+		if ok && v > last {
+			last = v
+		}
+	}
+	return last, nil
+}

@@ -1,0 +1,10 @@
+logger:
+  level: $LOG_LEVEL
+
+storage:
+  dsn: "host=$PG_HOST \
+        port=$PG_PORT \
+        user=$PG_USER \
+        password=$PG_PASSWORD \
+        dbname=$PG_DB \
+        sslmode=$PG_SSLMODE"

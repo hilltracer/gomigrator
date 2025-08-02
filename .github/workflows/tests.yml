@@ -1,0 +1,45 @@
+name: gomigrator CI
+
+on:
+  push:
+    branches:
+      - wip
+
+env:
+  GO111MODULE: "on"
+  GOLANG_VERSION: "1.23.0"
+  GOLANGCI_LINT_VERSION: v1.63.4
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GOLANG_VERSION }}
+
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Run linters
+        run: make lint
+
+      - name: Build binary
+        run: make build
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose version
+
+      - name: Run integration tests
+        run: make integration-test
+
+      - name: Cleanup Docker containers
+        run: docker-compose down -v
